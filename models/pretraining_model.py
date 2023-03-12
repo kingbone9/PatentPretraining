@@ -64,7 +64,7 @@ class MLPLayer(nn.Module):
 class Similarity(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.temp = config.temp
+        self.temp = 0.05
         self.cos = nn.CosineSimilarity(dim=-1)
 
     def forward(self, x, y):
@@ -91,10 +91,12 @@ class BertPreTrainingHeads(nn.Module):
         self.contrastive = Similarity(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-    def forward(self, sequence_output, pooled_output):
+    def forward(self, sequence_output, pooled_output, contrastive_output):
+        cos_sim = self.contrastive(pooled_output.unsqueeze(1),contrastive_output.unsqueeze(0))
+        pooled_output = self.dropout(pooled_output)
         prediction_scores = self.masked_token_predictions(sequence_output)
         ipc_logits = self.ipc_predictions(pooled_output)
-        return prediction_scores, ipc_logits
+        return prediction_scores, ipc_logits, cos_sim
 
 
 class Pooler(nn.Module):
@@ -144,7 +146,6 @@ class BertForPreTraining(BertPreTrainedModel):
 
         self.bert = BertModel(config)
         self.cls = BertPreTrainingHeads(config)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
         self.init_weights()
 
@@ -178,6 +179,7 @@ class BertForPreTraining(BertPreTrainedModel):
 
         Returns:
         """
+        device = input_ids.device
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         outputs = self.bert(
@@ -206,23 +208,25 @@ class BertForPreTraining(BertPreTrainedModel):
 
         sequence_output, pooled_output = outputs[:2]
         _, constrastive_pooled_output = contrastive_outputs[:2]
-        prediction_scores, ipc_logits = self.cls(sequence_output, pooled_output,constrastive_pooled_output)
+        prediction_scores, ipc_logits, cos_sim = self.cls(sequence_output, pooled_output, constrastive_pooled_output)
 
+        contrastive_label = torch.arange(cos_sim.size(0)).long().to(device)
         total_loss = None
         if labels is not None and ipc_labels is not None:
-            loss_fct_ce = CrossEntropyLoss(ignore_index=0)
-            temp = CrossEntropyLoss()
+            loss_fct_mlm = CrossEntropyLoss(ignore_index=0)
+            loss_fct_ce = CrossEntropyLoss()
             loss_fct_bce = BCEWithLogitsLoss()
-            masked_lm_loss = loss_fct_ce(prediction_scores.reshape(-1, self.config.vocab_size), labels.reshape(-1))
+            masked_lm_loss = loss_fct_mlm(prediction_scores.reshape(-1, self.config.vocab_size), labels.reshape(-1))
             ipc_predict_loss = loss_fct_bce(ipc_logits, ipc_labels)
-            total_loss = masked_lm_loss + ipc_predict_loss
+            contrastive_loss = loss_fct_ce(cos_sim, contrastive_label)
+            total_loss = masked_lm_loss + ipc_predict_loss + contrastive_loss
 
         if not return_dict:
             output = (prediction_scores, ipc_logits) + outputs[2:]
-            return ((total_loss,) + output) if total_loss is not None else output
+            return ((total_loss, masked_lm_loss, ipc_predict_loss,) + output) if total_loss is not None else output
 
         return BertForMLMIPCPredictOutput(
-            loss=total_loss,
+            loss=[total_loss, masked_lm_loss, ipc_predict_loss],
             prediction_logits=prediction_scores,
             ipc_logits=ipc_logits,
             hidden_states=outputs.hidden_states,

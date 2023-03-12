@@ -5,10 +5,10 @@ import os
 import logging
 import sys
 
-from .utils.log_helper import logger_init
-from .models.pretraing_model import BertForPreTraining
+from utils.log_helper import logger_init
+from models.pretraining_model import BertForPreTraining
 from transformers import BertConfig
-from .utils.create_pretraining_data import LoadBertPretrainingDataset
+from utils.create_pretraining_data import LoadBertPretrainingDataset
 from transformers import BertTokenizer
 from transformers import AdamW
 from transformers import get_polynomial_decay_schedule_with_warmup
@@ -58,6 +58,7 @@ class ModelConfig:
         self.use_torch_multi_head = False  # False表示使用model/BasicBert/MyTransformer中的多头实现
         self.epochs = 3
         self.model_val_per_epoch = 1
+        self.temp = 0.05
 
         logger_init(log_file_name=self.data_name, log_level=self.log_level,
                     log_dir=self.logs_save_dir)
@@ -141,11 +142,7 @@ def train(config):
                                                       ipc_labels=b_ipc_label,
                                                       )[:3]
 
-            t_loss, mlm_loss, ipc_loss = loss_list
-            if epoch == 0 and idx < 400000:
-                loss = mlm_loss
-            else:
-                loss = t_loss
+            loss, mlm_loss, ipc_loss = loss_list
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()

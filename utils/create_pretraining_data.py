@@ -3,8 +3,8 @@
 import logging
 import random
 from tqdm import tqdm
-from .data_helpers import build_vocab, pad_sequence, id2ipc, ipc2id
-from .data_helpers import pad_sequence
+from .data_helper import build_vocab, pad_sequence, id2ipc, ipc2id
+from .data_helper import pad_sequence
 import torch
 from torch.utils.data import DataLoader
 import os
@@ -108,7 +108,7 @@ class LoadBertPretrainingDataset(object):
         word_span_list = list()
         for spans in whole_word_dict.values():
             for span in spans:
-                word_span_list += [[idx for idx in range(span[0], span[-1] + 1)]]
+                word_span_list += [[idx for idx in range(span[0] + 1, span[-1] + 2)]]
         return word_span_list
 
     def replace_masked_tokens(self, token_ids, candidate_pred_positions, num_mlm_preds, word_span_list, word_idx):
