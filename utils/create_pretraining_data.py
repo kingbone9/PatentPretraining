@@ -187,7 +187,7 @@ class LoadBertPretrainingDataset(object):
         df['whole_word'] = df.whole_word.apply(lambda x: eval(x))
         df['ipc'] = df.ipc.apply(lambda x: eval(x))
         df.sample(frac=1).reset_index(drop=True)
-        self.train_df = df[:-4000]
+        self.train_df = df[:10000]
         self.val_df = df[-4000:]
 
     def data_process_train(self):

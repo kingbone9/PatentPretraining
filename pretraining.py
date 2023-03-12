@@ -44,7 +44,7 @@ class ModelConfig:
         self.writer = SummaryWriter(f"runs/{self.data_name}")
         self.is_sample_shuffle = True
         self.use_embedding_weight = True
-        self.batch_size = 24
+        self.batch_size = 8
         self.max_sen_len = None  # 为None时则采用每个batch中最长的样本对该batch中的样本进行padding
         self.pad_index = 0
         self.random_state = 2022
@@ -65,7 +65,7 @@ class ModelConfig:
         if not os.path.exists(self.model_save_dir):
             os.makedirs(self.model_save_dir)
         self.bert_config = BertConfig.from_pretrained(self.pretrained_model_dir)
-        self.bert_config.ipc_num = 125
+        self.bert_config.ipc_num = 130
         for key, value in self.bert_config.__dict__.items():
             self.__dict__[key] = value
         # 将当前配置打印到日志文件中
